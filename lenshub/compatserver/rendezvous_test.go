@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -121,5 +122,18 @@ func TestUnsafeUnverifiedLoginRequiresLoopbackUDPBind(t *testing.T) {
 	cfg.PPPPUDPBindIP = "127.0.0.1"
 	if err := validateConfig(cfg); err != nil {
 		t.Fatalf("loopback-only unsafe smoke config rejected: %v", err)
+	}
+}
+
+func TestHTTPPreservesZLMediaKitServiceIdentity(t *testing.T) {
+	cfg := defaultConfig()
+	h := newHTTPHandler(cfg, newRegistry())
+	for _, path := range []string{"/healthz", "/readyz"} {
+		req := httptest.NewRequest("GET", path, nil)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if got := rr.Header().Get("Server"); got != "ZLMediaKit-LensHub-P2P" {
+			t.Fatalf("%s Server header = %q", path, got)
+		}
 	}
 }

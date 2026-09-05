@@ -291,9 +291,10 @@ func handleDiagnosticPayload(cfg Config, reg *Registry, payload string) Diagnost
 	}
 }
 
-func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
+func newHTTPHandler(cfg Config, reg *Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "ZLMediaKit-LensHub-P2P")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true, "provider_type": cfg.ProviderType, "group_id": cfg.ServerGroupID,
 			"wire_protocol": "pppp_f1", "compatibility": compatibilityLevel,
@@ -301,6 +302,7 @@ func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
 		})
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "ZLMediaKit-LensHub-P2P")
 		count, stats := reg.snapshot()
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true, "registered_devices": count, "wire_protocol": "pppp_f1",
@@ -309,7 +311,11 @@ func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
 			"compatibility":              compatibilityLevel, "stats": stats,
 		})
 	})
-	srv := &http.Server{Addr: cfg.HealthHTTPAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	return mux
+}
+
+func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
+	srv := &http.Server{Addr: cfg.HealthHTTPAddr, Handler: newHTTPHandler(cfg, reg), ReadHeaderTimeout: 5 * time.Second}
 	go func() { <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
 	err := srv.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {

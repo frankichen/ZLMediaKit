@@ -73,6 +73,8 @@ Until those gates pass, SXT provider region/group/node/inventory rows must remai
 
 The wire implementation uses public protocol research as behavioral reference, without importing third-party client/server source wholesale. Important references and licenses are recorded in `lenshub/THIRD_PARTY_NOTICES.md`.
 
+The fork also preserves the root ZLMediaKit license and supplemental attribution requirement. LensHub HTTP health/readiness responses therefore retain `ZLMediaKit` in the `Server` header.
+
 Do not copy GPL implementations into this fork. Do not commit supplier SDK binaries, vendor keys, init secrets, CRC keys, P2P keys, wake-up keys, tokens, device passwords or captured private credentials.
 
 ## Layout

@@ -23,16 +23,18 @@ import (
 const compatibilityLevel = "pppp_f1_rendezvous_foundation_not_vendor_validated"
 
 type Config struct {
-	ProviderType       string   `json:"provider_type"`
-	ServerGroupID      string   `json:"p2p_server_group_id"`
-	PublicIP           string   `json:"public_ip"`
-	WakeupUDPPort      int      `json:"wakeup_udp_port"`
-	PlainTCPPort       int      `json:"plain_tcp_port"`
-	DSLKTCPPort        int      `json:"dslk_tcp_port"`
-	HealthHTTPAddr     string   `json:"health_http_addr"`
-	AllowedDIDPrefixes []string `json:"allowed_did_prefixes"`
-	PresenceTTLSeconds int      `json:"presence_ttl_seconds"`
-	PPPPPSKEnv         string   `json:"pppp_psk_env,omitempty"`
+	ProviderType                         string   `json:"provider_type"`
+	ServerGroupID                        string   `json:"p2p_server_group_id"`
+	PublicIP                             string   `json:"public_ip"`
+	WakeupUDPPort                        int      `json:"wakeup_udp_port"`
+	PlainTCPPort                         int      `json:"plain_tcp_port"`
+	DSLKTCPPort                          int      `json:"dslk_tcp_port"`
+	DiagnosticTCPAddr                    string   `json:"diagnostic_tcp_addr"`
+	HealthHTTPAddr                       string   `json:"health_http_addr"`
+	AllowedDIDPrefixes                   []string `json:"allowed_did_prefixes"`
+	PresenceTTLSeconds                   int      `json:"presence_ttl_seconds"`
+	PPPPPSKEnv                           string   `json:"pppp_psk_env,omitempty"`
+	UnsafeAllowUnverifiedDIDLoginForTest bool     `json:"unsafe_allow_unverified_did_login_for_test"`
 }
 
 type DiagnosticRequest struct {
@@ -60,6 +62,7 @@ func defaultConfig() Config {
 		WakeupUDPPort:      12305,
 		PlainTCPPort:       12306,
 		DSLKTCPPort:        12308,
+		DiagnosticTCPAddr:  "127.0.0.1:18181",
 		HealthHTTPAddr:     "127.0.0.1:18180",
 		AllowedDIDPrefixes: []string{"PPCS"},
 		PresenceTTLSeconds: 90,
@@ -82,13 +85,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 4)
+	errCh := make(chan error, 3)
 	go func() { errCh <- servePPPPUDP(ctx, cfg, reg) }()
-	go func() { errCh <- serveDiagnosticTCP(ctx, cfg, reg, cfg.PlainTCPPort, "plain-diagnostic") }()
-	go func() { errCh <- serveDiagnosticTCP(ctx, cfg, reg, cfg.DSLKTCPPort, "dslk-diagnostic") }()
+	go func() { errCh <- serveDiagnosticTCP(ctx, cfg, reg) }()
 	go func() { errCh <- serveHTTP(ctx, cfg, reg) }()
 
-	log.Printf("LensHub PPPP compatibility runtime started provider=%s group=%s pppp_udp=%d diag_tcp=%d diag_dslk=%d health=%s compatibility=%s", cfg.ProviderType, cfg.ServerGroupID, cfg.WakeupUDPPort, cfg.PlainTCPPort, cfg.DSLKTCPPort, cfg.HealthHTTPAddr, compatibilityLevel)
+	log.Printf("LensHub PPPP compatibility runtime started provider=%s group=%s pppp_udp=%d reserved_tcp=%d reserved_dslk=%d diag=%s health=%s compatibility=%s", cfg.ProviderType, cfg.ServerGroupID, cfg.WakeupUDPPort, cfg.PlainTCPPort, cfg.DSLKTCPPort, cfg.DiagnosticTCPAddr, cfg.HealthHTTPAddr, compatibilityLevel)
 	select {
 	case <-ctx.Done():
 		log.Printf("shutdown requested")
@@ -125,6 +127,9 @@ func validateConfig(cfg Config) error {
 	}
 	if cfg.HealthHTTPAddr == "" {
 		return fmt.Errorf("health_http_addr is required")
+	}
+	if err := validateLoopbackTCPAddr(cfg.DiagnosticTCPAddr); err != nil {
+		return fmt.Errorf("diagnostic_tcp_addr: %w", err)
 	}
 	if cfg.PresenceTTLSeconds < 5 || cfg.PresenceTTLSeconds > 3600 {
 		return fmt.Errorf("presence_ttl_seconds must be between 5 and 3600")
@@ -190,16 +195,16 @@ func servePPPPUDP(ctx context.Context, cfg Config, reg *Registry) error {
 	}
 }
 
-// TCP 12306/12308 remain diagnostic-only in B1. CS2 TCP fallback has a
-// different wire envelope and is intentionally not faked here.
-func serveDiagnosticTCP(ctx context.Context, cfg Config, reg *Registry, port int, mode string) error {
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+// TCP 12306/12308 are reserved for actual CS2 TCP/DSLK framing and are not
+// opened until that framing is implemented. Diagnostics bind loopback only.
+func serveDiagnosticTCP(ctx context.Context, cfg Config, reg *Registry) error {
+	ln, err := net.Listen("tcp", cfg.DiagnosticTCPAddr)
 	if err != nil {
 		return err
 	}
 	defer ln.Close()
 	go func() { <-ctx.Done(); _ = ln.Close() }()
-	log.Printf("diagnostic TCP listener mode=%s port=%d", mode, port)
+	log.Printf("loopback diagnostic TCP listener addr=%s", cfg.DiagnosticTCPAddr)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -210,6 +215,22 @@ func serveDiagnosticTCP(ctx context.Context, cfg Config, reg *Registry, port int
 		}
 		go handleDiagnosticConn(cfg, reg, conn)
 	}
+}
+
+func validateLoopbackTCPAddr(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("must use an explicit loopback IP")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("invalid port")
+	}
+	return nil
 }
 
 func handleDiagnosticConn(cfg Config, reg *Registry, conn net.Conn) {
@@ -275,7 +296,8 @@ func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true, "registered_devices": count, "wire_protocol": "pppp_f1",
 			"direct_rendezvous": true, "pppp_relay": false, "tcp_fallback": false,
-			"compatibility": compatibilityLevel, "stats": stats,
+			"unverified_login_test_mode": cfg.UnsafeAllowUnverifiedDIDLoginForTest,
+			"compatibility":              compatibilityLevel, "stats": stats,
 		})
 	})
 	srv := &http.Server{Addr: cfg.HealthHTTPAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}

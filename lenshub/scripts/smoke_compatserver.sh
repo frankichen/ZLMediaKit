@@ -27,7 +27,7 @@ done
 curl -fsS http://127.0.0.1:18180/healthz >/tmp/lenshub-p2p-compat-health.json
 go run ./cmd/ppppprobe -addr 127.0.0.1:12305 -did PPCS-020070-BNRLZ
 curl -fsS http://127.0.0.1:18180/readyz >/tmp/lenshub-p2p-compat-ready.json
-printf '{"cmd":"stats"}\n' | nc -w 2 127.0.0.1 12306 >/tmp/lenshub-p2p-compat-stats.json
+printf '{"cmd":"stats"}\n' | nc -w 2 127.0.0.1 18181 >/tmp/lenshub-p2p-compat-stats.json
 
 cat /tmp/lenshub-p2p-compat-health.json; echo
 cat /tmp/lenshub-p2p-compat-ready.json; echo

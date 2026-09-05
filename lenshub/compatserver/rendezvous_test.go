@@ -37,6 +37,7 @@ func TestHelloReturnsObservedEndpoint(t *testing.T) {
 func TestDeviceLoginAndP2PRequestProducePunchPair(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.AllowedDIDPrefixes = []string{"PPCS"}
+	cfg.UnsafeAllowUnverifiedDIDLoginForTest = true
 	reg := newRegistry()
 	did := testDID(t)
 	wire, _ := did.Wire20()
@@ -66,6 +67,21 @@ func TestDeviceLoginAndP2PRequestProducePunchPair(t *testing.T) {
 	}
 	if out[2].to.String() != device.String() {
 		t.Fatalf("server sent device punch instruction to %s", out[2].to)
+	}
+}
+
+func TestDeviceLoginFailsClosedByDefault(t *testing.T) {
+	cfg := defaultConfig()
+	reg := newRegistry()
+	did := testDID(t)
+	wire, _ := did.Wire20()
+	device := &net.UDPAddr{IP: net.ParseIP("198.51.100.20"), Port: 23001}
+	out := handleWirePacket(cfg, reg, device, decodedDatagram{packet: pppp.Packet{Type: pppp.MsgDevLogin, Payload: append(wire[:], make([]byte, 20)...)}})
+	if len(out) != 1 || out[0].packet.Payload[0] == 0 {
+		t.Fatalf("unverified login should fail closed")
+	}
+	if count, _ := reg.snapshot(); count != 0 {
+		t.Fatalf("unverified login registered %d devices", count)
 	}
 }
 

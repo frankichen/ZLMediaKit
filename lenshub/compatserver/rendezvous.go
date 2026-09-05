@@ -129,6 +129,12 @@ func handleWirePacket(cfg Config, reg *Registry, remote *net.UDPAddr, decoded de
 		return []outboundDatagram{toRemote(pppp.MsgHelloAck, endpoint[:])}
 
 	case pppp.MsgDevLogin:
+		if !cfg.UnsafeAllowUnverifiedDIDLoginForTest {
+			// Until the target CS2 license/CRC/device-login variant is proven,
+			// accepting an unauthenticated DID registration would allow presence
+			// hijacking. Production-like mode therefore fails closed.
+			return []outboundDatagram{toRemote(pppp.MsgDevLoginAck, pppp.StatusPayload(0xFC))}
+		}
 		did, err := didFromPayload(pkt.Payload)
 		if err != nil || !allowedDID(cfg, did) {
 			return []outboundDatagram{toRemote(pppp.MsgDevLoginAck, pppp.StatusPayload(0xFC))}

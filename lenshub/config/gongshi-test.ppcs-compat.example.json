@@ -9,17 +9,21 @@
     "wakeup_udp": 12305,
     "plain_tcp": 12306,
     "dslk_tcp": 12308,
-    "health_http": 18180
+    "health_http": 18180,
+    "diagnostic_tcp": "127.0.0.1:18181"
   },
   "wire_protocol": {
     "family": "pppp_cs2",
     "f1_udp_rendezvous": true,
-    "allowed_did_prefixes": ["PPCS"],
+    "allowed_did_prefixes": [
+      "PPCS"
+    ],
     "did_example": "PPCS-020070-BNRLZ",
     "presence_ttl_seconds": 90,
     "pppp_psk_env": "LENSHUB_PPPP_PSK",
     "tcp_fallback_implemented": false,
-    "relay_implemented": false
+    "relay_implemented": false,
+    "unsafe_allow_unverified_did_login_for_test": true
   },
   "prepared_inventory": {
     "database_rows": 100,
@@ -39,7 +43,8 @@
   "notes": [
     "The existing 100 SXT rows are inventory placeholders, not validated CS2 wire DIDs.",
     "Do not convert placeholder rows to available until real vendor-compatible DIDs are imported or generated with a verified vendor algorithm.",
-    "UDP 12305 runs the B1 PPPP F1 rendezvous path; TCP 12306/12308 remain diagnostic-only until CS2 TCP/DSLK framing is implemented.",
+    "UDP 12305 runs the B1 PPPP F1 rendezvous path; TCP 12306/12308 are reserved and intentionally not bound until CS2 TCP/DSLK framing is implemented.",
+    "The synthetic gongshi-test probe enables unsafe unverified DID login explicitly; production-like mode fails closed by default.",
     "No supplier secret or PSK is stored in this file."
   ]
 }

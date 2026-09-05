@@ -6,7 +6,11 @@
   "plain_tcp_port": 12306,
   "dslk_tcp_port": 12308,
   "health_http_addr": "127.0.0.1:18180",
-  "allowed_did_prefixes": ["PPCS"],
+  "allowed_did_prefixes": [
+    "PPCS"
+  ],
   "presence_ttl_seconds": 90,
-  "pppp_psk_env": "LENSHUB_PPPP_PSK"
+  "pppp_psk_env": "LENSHUB_PPPP_PSK",
+  "diagnostic_tcp_addr": "127.0.0.1:18181",
+  "unsafe_allow_unverified_did_login_for_test": true
 }

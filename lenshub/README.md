@@ -33,7 +33,7 @@ Implemented and locally tested:
 - HTTP health/readiness and counters.
 - TCP 12306/12308 are reserved for real CS2 TCP/DSLK fallback and are intentionally left unbound in B1.
 - Development diagnostics bind only to `127.0.0.1:18181`.
-- Unverified `MSG_DEV_LGN` registration fails closed by default; the synthetic gongshi-test smoke must opt in with `unsafe_allow_unverified_did_login_for_test=true`.
+- Unverified `MSG_DEV_LGN` registration fails closed by default. The deployable examples keep the unsafe switch off; synthetic smoke may enable it only when `pppp_udp_bind_ip` is an explicit loopback IPv4 address.
 
 The deterministic smoke path simulates a device and controller and validates:
 
@@ -67,7 +67,7 @@ The following still require real APP/camera traffic or a confirmed SDK contract 
 7. Real vendor DID generation/verification. The 100 SXT rows currently prepared in `gongshi-test` are disabled placeholders and are not wire-valid inventory.
 8. Packet-level validation against the current production APP SDK and real camera firmware.
 
-Until those gates pass, SXT provider region/group/node/inventory rows must remain `disabled/draft/drain`.
+Until those gates pass, SXT provider region/group/node/inventory rows must remain `disabled/draft/drain`. Public-facing runtime configuration must keep `unsafe_allow_unverified_did_login_for_test=false`.
 
 ## Source and clean-room policy
 

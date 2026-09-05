@@ -27,6 +27,7 @@ type Config struct {
 	ServerGroupID                        string   `json:"p2p_server_group_id"`
 	PublicIP                             string   `json:"public_ip"`
 	WakeupUDPPort                        int      `json:"wakeup_udp_port"`
+	PPPPUDPBindIP                        string   `json:"pppp_udp_bind_ip"`
 	PlainTCPPort                         int      `json:"plain_tcp_port"`
 	DSLKTCPPort                          int      `json:"dslk_tcp_port"`
 	DiagnosticTCPAddr                    string   `json:"diagnostic_tcp_addr"`
@@ -60,6 +61,7 @@ func defaultConfig() Config {
 		ServerGroupID:      "gongshi-test-group-01",
 		PublicIP:           "47.76.137.198",
 		WakeupUDPPort:      12305,
+		PPPPUDPBindIP:      "0.0.0.0",
 		PlainTCPPort:       12306,
 		DSLKTCPPort:        12308,
 		DiagnosticTCPAddr:  "127.0.0.1:18181",
@@ -128,6 +130,13 @@ func validateConfig(cfg Config) error {
 	if cfg.HealthHTTPAddr == "" {
 		return fmt.Errorf("health_http_addr is required")
 	}
+	bindIP := net.ParseIP(strings.TrimSpace(cfg.PPPPUDPBindIP))
+	if bindIP == nil || bindIP.To4() == nil {
+		return fmt.Errorf("pppp_udp_bind_ip must be an explicit IPv4 address")
+	}
+	if cfg.UnsafeAllowUnverifiedDIDLoginForTest && !bindIP.IsLoopback() {
+		return fmt.Errorf("unsafe unverified DID login is allowed only on loopback PPPP UDP bind IP")
+	}
 	if err := validateLoopbackTCPAddr(cfg.DiagnosticTCPAddr); err != nil {
 		return fmt.Errorf("diagnostic_tcp_addr: %w", err)
 	}
@@ -143,7 +152,7 @@ func validateConfig(cfg Config) error {
 }
 
 func servePPPPUDP(ctx context.Context, cfg Config, reg *Registry) error {
-	addr := net.UDPAddr{IP: net.IPv4zero, Port: cfg.WakeupUDPPort}
+	addr := net.UDPAddr{IP: net.ParseIP(cfg.PPPPUDPBindIP).To4(), Port: cfg.WakeupUDPPort}
 	conn, err := net.ListenUDP("udp", &addr)
 	if err != nil {
 		return err

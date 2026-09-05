@@ -110,3 +110,16 @@ func TestPresenceExpires(t *testing.T) {
 		t.Fatalf("expired presence should fail")
 	}
 }
+
+func TestUnsafeUnverifiedLoginRequiresLoopbackUDPBind(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.UnsafeAllowUnverifiedDIDLoginForTest = true
+	cfg.PPPPUDPBindIP = "0.0.0.0"
+	if err := validateConfig(cfg); err == nil {
+		t.Fatal("unsafe unverified login must be rejected on non-loopback UDP bind")
+	}
+	cfg.PPPPUDPBindIP = "127.0.0.1"
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("loopback-only unsafe smoke config rejected: %v", err)
+	}
+}

@@ -14,70 +14,81 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
+
+	"github.com/frankichen/ZLMediaKit/lenshub/compatserver/pppp"
 )
 
+const compatibilityLevel = "pppp_f1_rendezvous_foundation_not_vendor_validated"
+
 type Config struct {
-	ProviderType     string `json:"provider_type"`
-	ServerGroupID    string `json:"p2p_server_group_id"`
-	PublicIP         string `json:"public_ip"`
-	WakeupUDPPort    int    `json:"wakeup_udp_port"`
-	PlainTCPPort     int    `json:"plain_tcp_port"`
-	DSLKTCPPort      int    `json:"dslk_tcp_port"`
-	HealthHTTPAddr   string `json:"health_http_addr"`
-	AllowedP2IDPrefix string `json:"allowed_p2pid_prefix"`
+	ProviderType       string   `json:"provider_type"`
+	ServerGroupID      string   `json:"p2p_server_group_id"`
+	PublicIP           string   `json:"public_ip"`
+	WakeupUDPPort      int      `json:"wakeup_udp_port"`
+	PlainTCPPort       int      `json:"plain_tcp_port"`
+	DSLKTCPPort        int      `json:"dslk_tcp_port"`
+	HealthHTTPAddr     string   `json:"health_http_addr"`
+	AllowedDIDPrefixes []string `json:"allowed_did_prefixes"`
+	PresenceTTLSeconds int      `json:"presence_ttl_seconds"`
+	PPPPPSKEnv         string   `json:"pppp_psk_env,omitempty"`
 }
 
-type Registry struct {
-	mu      sync.RWMutex
-	devices map[string]DeviceSession
-}
-
-type DeviceSession struct {
-	P2PID       string    `json:"p2pid"`
-	GroupID     string    `json:"group_id"`
-	RemoteAddr  string    `json:"remote_addr"`
-	LastSeenUTC time.Time `json:"last_seen_utc"`
-}
-
-type Request struct {
+type DiagnosticRequest struct {
 	Command string `json:"cmd"`
-	GroupID string `json:"group_id,omitempty"`
-	P2PID   string `json:"p2pid,omitempty"`
-	Role    string `json:"role,omitempty"`
+	DID     string `json:"did,omitempty"`
 }
 
-type Response struct {
-	OK          bool           `json:"ok"`
-	Error       string         `json:"error,omitempty"`
-	Provider    string         `json:"provider_type,omitempty"`
-	GroupID     string         `json:"group_id,omitempty"`
-	P2PID       string         `json:"p2pid,omitempty"`
-	Session     *DeviceSession `json:"session,omitempty"`
-	ServerTime  time.Time      `json:"server_time_utc"`
-	Compatibility string       `json:"compatibility"`
+type DiagnosticResponse struct {
+	OK            bool            `json:"ok"`
+	Error         string          `json:"error,omitempty"`
+	Provider      string          `json:"provider_type"`
+	GroupID       string          `json:"group_id"`
+	DID           string          `json:"did,omitempty"`
+	Session       *DevicePresence `json:"session,omitempty"`
+	Stats         *WireStats      `json:"stats,omitempty"`
+	ServerTimeUTC time.Time       `json:"server_time_utc"`
+	Compatibility string          `json:"compatibility"`
+}
+
+func defaultConfig() Config {
+	return Config{
+		ProviderType:       "p2px_ppcs",
+		ServerGroupID:      "gongshi-test-group-01",
+		PublicIP:           "47.76.137.198",
+		WakeupUDPPort:      12305,
+		PlainTCPPort:       12306,
+		DSLKTCPPort:        12308,
+		HealthHTTPAddr:     "127.0.0.1:18180",
+		AllowedDIDPrefixes: []string{"PPCS"},
+		PresenceTTLSeconds: 90,
+	}
+}
+
+func (c Config) PresenceTTL() time.Duration {
+	return time.Duration(c.PresenceTTLSeconds) * time.Second
 }
 
 func main() {
 	configPath := flag.String("config", "", "path to JSON config")
 	flag.Parse()
+
 	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	reg := &Registry{devices: make(map[string]DeviceSession)}
+	reg := newRegistry()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	errCh := make(chan error, 4)
-	go func() { errCh <- serveUDP(ctx, cfg, reg, cfg.WakeupUDPPort) }()
-	go func() { errCh <- serveTCP(ctx, cfg, reg, cfg.PlainTCPPort, "plain") }()
-	go func() { errCh <- serveTCP(ctx, cfg, reg, cfg.DSLKTCPPort, "dslk") }()
+	go func() { errCh <- servePPPPUDP(ctx, cfg, reg) }()
+	go func() { errCh <- serveDiagnosticTCP(ctx, cfg, reg, cfg.PlainTCPPort, "plain-diagnostic") }()
+	go func() { errCh <- serveDiagnosticTCP(ctx, cfg, reg, cfg.DSLKTCPPort, "dslk-diagnostic") }()
 	go func() { errCh <- serveHTTP(ctx, cfg, reg) }()
 
-	log.Printf("lenshub compat skeleton started provider=%s group=%s udp=%d tcp=%d dslk=%d health=%s", cfg.ProviderType, cfg.ServerGroupID, cfg.WakeupUDPPort, cfg.PlainTCPPort, cfg.DSLKTCPPort, cfg.HealthHTTPAddr)
+	log.Printf("LensHub PPPP compatibility runtime started provider=%s group=%s pppp_udp=%d diag_tcp=%d diag_dslk=%d health=%s compatibility=%s", cfg.ProviderType, cfg.ServerGroupID, cfg.WakeupUDPPort, cfg.PlainTCPPort, cfg.DSLKTCPPort, cfg.HealthHTTPAddr, compatibilityLevel)
 	select {
 	case <-ctx.Done():
 		log.Printf("shutdown requested")
@@ -89,18 +100,9 @@ func main() {
 }
 
 func loadConfig(path string) (Config, error) {
-	cfg := Config{
-		ProviderType: "p2px_ppcs",
-		ServerGroupID: "gongshi-test-group-01",
-		PublicIP: "47.76.137.198",
-		WakeupUDPPort: 12305,
-		PlainTCPPort: 12306,
-		DSLKTCPPort: 12308,
-		HealthHTTPAddr: "127.0.0.1:18180",
-		AllowedP2IDPrefix: "PPCS-GSTEST-20260905-",
-	}
+	cfg := defaultConfig()
 	if path == "" {
-		return cfg, nil
+		return cfg, validateConfig(cfg)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -124,107 +126,163 @@ func validateConfig(cfg Config) error {
 	if cfg.HealthHTTPAddr == "" {
 		return fmt.Errorf("health_http_addr is required")
 	}
+	if cfg.PresenceTTLSeconds < 5 || cfg.PresenceTTLSeconds > 3600 {
+		return fmt.Errorf("presence_ttl_seconds must be between 5 and 3600")
+	}
+	for _, prefix := range cfg.AllowedDIDPrefixes {
+		if len(strings.TrimSpace(prefix)) != 4 {
+			return fmt.Errorf("allowed_did_prefixes entry must be four bytes: %q", prefix)
+		}
+	}
 	return nil
 }
 
-func serveUDP(ctx context.Context, cfg Config, reg *Registry, port int) error {
-	addr := net.UDPAddr{IP: net.IPv4zero, Port: port}
+func servePPPPUDP(ctx context.Context, cfg Config, reg *Registry) error {
+	addr := net.UDPAddr{IP: net.IPv4zero, Port: cfg.WakeupUDPPort}
 	conn, err := net.ListenUDP("udp", &addr)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	buf := make([]byte, 4096)
 	go func() { <-ctx.Done(); _ = conn.Close() }()
+
+	var psk string
+	if cfg.PPPPPSKEnv != "" {
+		psk = os.Getenv(cfg.PPPPPSKEnv)
+		if psk == "" {
+			log.Printf("PPPP PSK env %s is not set; only plain F1 packets will be accepted", cfg.PPPPPSKEnv)
+		}
+	}
+
+	buf := make([]byte, 64*1024)
 	for {
 		n, remote, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			if ctx.Err() != nil { return ctx.Err() }
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
-		resp := handlePayload(cfg, reg, remote.String(), bytesToString(buf[:n]))
-		out, _ := json.Marshal(resp)
-		_, _ = conn.WriteToUDP(append(out, '\n'), remote)
+		reg.noteReceive()
+		decoded, err := decodeWireDatagram(buf[:n], psk)
+		if err != nil {
+			reg.noteParseError()
+			continue
+		}
+		out := handleWirePacket(cfg, reg, remote, decoded)
+		var sent uint64
+		for _, datagram := range out {
+			wire, err := datagram.packet.MarshalBinary()
+			if err != nil {
+				continue
+			}
+			if datagram.obfuscate {
+				if psk == "" {
+					continue
+				}
+				wire = pppp.Obfuscate(psk, wire)
+			}
+			if _, err := conn.WriteToUDP(wire, datagram.to); err == nil {
+				sent++
+			}
+		}
+		reg.noteSent(sent)
 	}
 }
 
-func serveTCP(ctx context.Context, cfg Config, reg *Registry, port int, mode string) error {
+// TCP 12306/12308 remain diagnostic-only in B1. CS2 TCP fallback has a
+// different wire envelope and is intentionally not faked here.
+func serveDiagnosticTCP(ctx context.Context, cfg Config, reg *Registry, port int, mode string) error {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer ln.Close()
 	go func() { <-ctx.Done(); _ = ln.Close() }()
+	log.Printf("diagnostic TCP listener mode=%s port=%d", mode, port)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			if ctx.Err() != nil { return ctx.Err() }
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
-		go handleTCPConn(cfg, reg, conn, mode)
+		go handleDiagnosticConn(cfg, reg, conn)
 	}
 }
 
-func handleTCPConn(cfg Config, reg *Registry, conn net.Conn, mode string) {
+func handleDiagnosticConn(cfg Config, reg *Registry, conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	s := bufio.NewScanner(conn)
 	for s.Scan() {
-		resp := handlePayload(cfg, reg, conn.RemoteAddr().String(), s.Text())
+		resp := handleDiagnosticPayload(cfg, reg, s.Text())
 		out, _ := json.Marshal(resp)
 		_, _ = conn.Write(append(out, '\n'))
+	}
+}
+
+func handleDiagnosticPayload(cfg Config, reg *Registry, payload string) DiagnosticResponse {
+	base := func(ok bool, errText string) DiagnosticResponse {
+		return DiagnosticResponse{OK: ok, Error: errText, Provider: cfg.ProviderType, GroupID: cfg.ServerGroupID, ServerTimeUTC: time.Now().UTC(), Compatibility: compatibilityLevel}
+	}
+	payload = strings.TrimSpace(payload)
+	if payload == "" || strings.EqualFold(payload, "ping") {
+		return base(true, "")
+	}
+	var req DiagnosticRequest
+	if err := json.Unmarshal([]byte(payload), &req); err != nil {
+		return base(false, "invalid_json")
+	}
+	switch strings.ToLower(req.Command) {
+	case "ping":
+		return base(true, "")
+	case "stats":
+		_, stats := reg.snapshot()
+		resp := base(true, "")
+		resp.Stats = &stats
+		return resp
+	case "lookup":
+		did, err := pppp.ParseDID(req.DID)
+		if err != nil {
+			return base(false, "invalid_did")
+		}
+		presence, ok := reg.lookup(did)
+		if !ok {
+			return base(false, "device_offline")
+		}
+		resp := base(true, "")
+		resp.DID = did.String()
+		resp.Session = &presence
+		return resp
+	default:
+		return base(false, "unknown_cmd")
 	}
 }
 
 func serveHTTP(ctx context.Context, cfg Config, reg *Registry) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "provider_type": cfg.ProviderType, "group_id": cfg.ServerGroupID, "server_time_utc": time.Now().UTC()})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "provider_type": cfg.ProviderType, "group_id": cfg.ServerGroupID,
+			"wire_protocol": "pppp_f1", "compatibility": compatibilityLevel,
+			"server_time_utc": time.Now().UTC(),
+		})
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		reg.mu.RLock(); count := len(reg.devices); reg.mu.RUnlock()
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "registered_devices": count, "compatibility": "skeleton_not_ppcs_wire_compatible"})
+		count, stats := reg.snapshot()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "registered_devices": count, "wire_protocol": "pppp_f1",
+			"direct_rendezvous": true, "pppp_relay": false, "tcp_fallback": false,
+			"compatibility": compatibilityLevel, "stats": stats,
+		})
 	})
 	srv := &http.Server{Addr: cfg.HealthHTTPAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() { <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
 	err := srv.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) { return context.Canceled }
+	if errors.Is(err, http.ErrServerClosed) {
+		return context.Canceled
+	}
 	return err
 }
-
-func handlePayload(cfg Config, reg *Registry, remote string, payload string) Response {
-	payload = strings.TrimSpace(payload)
-	if payload == "" || strings.EqualFold(payload, "ping") {
-		return baseResponse(cfg, true, "")
-	}
-	var req Request
-	if err := json.Unmarshal([]byte(payload), &req); err != nil {
-		return baseResponse(cfg, false, "invalid_json")
-	}
-	if req.GroupID != "" && req.GroupID != cfg.ServerGroupID {
-		return baseResponse(cfg, false, "group_mismatch")
-	}
-	if req.P2PID != "" && cfg.AllowedP2IDPrefix != "" && !strings.HasPrefix(req.P2PID, cfg.AllowedP2IDPrefix) {
-		return baseResponse(cfg, false, "p2pid_prefix_denied")
-	}
-	switch strings.ToLower(req.Command) {
-	case "ping":
-		return baseResponse(cfg, true, "")
-	case "register", "heartbeat":
-		if req.P2PID == "" { return baseResponse(cfg, false, "p2pid_required") }
-		sess := DeviceSession{P2PID: req.P2PID, GroupID: cfg.ServerGroupID, RemoteAddr: remote, LastSeenUTC: time.Now().UTC()}
-		reg.mu.Lock(); reg.devices[req.P2PID] = sess; reg.mu.Unlock()
-		resp := baseResponse(cfg, true, ""); resp.P2PID = req.P2PID; resp.Session = &sess; return resp
-	case "lookup":
-		if req.P2PID == "" { return baseResponse(cfg, false, "p2pid_required") }
-		reg.mu.RLock(); sess, ok := reg.devices[req.P2PID]; reg.mu.RUnlock()
-		if !ok { return baseResponse(cfg, false, "device_offline") }
-		resp := baseResponse(cfg, true, ""); resp.P2PID = req.P2PID; resp.Session = &sess; return resp
-	default:
-		return baseResponse(cfg, false, "unknown_cmd")
-	}
-}
-
-func baseResponse(cfg Config, ok bool, errText string) Response {
-	return Response{OK: ok, Error: errText, Provider: cfg.ProviderType, GroupID: cfg.ServerGroupID, ServerTime: time.Now().UTC(), Compatibility: "skeleton_not_ppcs_wire_compatible"}
-}
-
-func bytesToString(b []byte) string { return string(b) }

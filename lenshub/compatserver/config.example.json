@@ -6,5 +6,7 @@
   "plain_tcp_port": 12306,
   "dslk_tcp_port": 12308,
   "health_http_addr": "127.0.0.1:18180",
-  "allowed_p2pid_prefix": "PPCS-GSTEST-20260905-"
+  "allowed_did_prefixes": ["PPCS"],
+  "presence_ttl_seconds": 90,
+  "pppp_psk_env": "LENSHUB_PPPP_PSK"
 }

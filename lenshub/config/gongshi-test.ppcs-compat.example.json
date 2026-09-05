@@ -11,9 +11,23 @@
     "dslk_tcp": 12308,
     "health_http": 18180
   },
-  "p2pid_prefix": "PPCS-GSTEST-20260905-",
-  "p2pid_start": 1,
-  "p2pid_count": 100,
+  "wire_protocol": {
+    "family": "pppp_cs2",
+    "f1_udp_rendezvous": true,
+    "allowed_did_prefixes": ["PPCS"],
+    "did_example": "PPCS-020070-BNRLZ",
+    "presence_ttl_seconds": 90,
+    "pppp_psk_env": "LENSHUB_PPPP_PSK",
+    "tcp_fallback_implemented": false,
+    "relay_implemented": false
+  },
+  "prepared_inventory": {
+    "database_rows": 100,
+    "status": "disabled",
+    "format": "placeholder_not_wire_did",
+    "placeholder_range": "PPCS-GSTEST-20260905-0001..0100",
+    "activation_allowed": false
+  },
   "sxt_activation_state": {
     "region_status": "disabled",
     "config_status": "draft",
@@ -23,8 +37,9 @@
     "pool_status": "disabled"
   },
   "notes": [
-    "This file mirrors the prepared gongshi-test resource rows.",
-    "Do not activate these rows until a real compatible runtime is listening and protocol-level checks pass.",
-    "No supplier secrets are stored here. Use secret-managed references in SXT provider config."
+    "The existing 100 SXT rows are inventory placeholders, not validated CS2 wire DIDs.",
+    "Do not convert placeholder rows to available until real vendor-compatible DIDs are imported or generated with a verified vendor algorithm.",
+    "UDP 12305 runs the B1 PPPP F1 rendezvous path; TCP 12306/12308 remain diagnostic-only until CS2 TCP/DSLK framing is implemented.",
+    "No supplier secret or PSK is stored in this file."
   ]
 }

@@ -1,0 +1,17 @@
+{
+  "provider_type": "p2px_ppcs",
+  "p2p_server_group_id": "gongshi-test-group-01",
+  "public_ip": "47.76.137.198",
+  "wakeup_udp_port": 12305,
+  "pppp_udp_bind_ip": "0.0.0.0",
+  "plain_tcp_port": 12306,
+  "dslk_tcp_port": 12308,
+  "health_http_addr": "127.0.0.1:18180",
+  "allowed_did_prefixes": [
+    "PPCS"
+  ],
+  "presence_ttl_seconds": 90,
+  "pppp_psk_env": "LENSHUB_PPPP_PSK",
+  "diagnostic_tcp_addr": "127.0.0.1:18181",
+  "unsafe_allow_unverified_did_login_for_test": false
+}

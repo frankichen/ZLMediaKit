@@ -1,0 +1,51 @@
+{
+  "provider_type": "p2px_ppcs",
+  "provider_region_id": "p2preg_gongshi_vendor_ppcs_test_20260905",
+  "provider_config_version": "p2px_ppcs_gongshi_vendor_test_v20260905_draft",
+  "p2p_server_group_id": "gongshi-test-group-01",
+  "p2p_resource_group_key": "p2psg_gongshi_vendor_ppcs_test_20260905",
+  "public_ip": "47.76.137.198",
+  "ports": {
+    "wakeup_udp": 12305,
+    "plain_tcp": 12306,
+    "dslk_tcp": 12308,
+    "health_http": 18180,
+    "diagnostic_tcp": "127.0.0.1:18181"
+  },
+  "wire_protocol": {
+    "family": "pppp_cs2",
+    "f1_udp_rendezvous": true,
+    "udp_bind_ip": "0.0.0.0",
+    "allowed_did_prefixes": [
+      "PPCS"
+    ],
+    "did_example": "PPCS-020070-BNRLZ",
+    "presence_ttl_seconds": 90,
+    "pppp_psk_env": "LENSHUB_PPPP_PSK",
+    "tcp_fallback_implemented": false,
+    "relay_implemented": false,
+    "unsafe_allow_unverified_did_login_for_test": false
+  },
+  "prepared_inventory": {
+    "database_rows": 100,
+    "status": "disabled",
+    "format": "placeholder_not_wire_did",
+    "placeholder_range": "PPCS-GSTEST-20260905-0001..0100",
+    "activation_allowed": false
+  },
+  "sxt_activation_state": {
+    "region_status": "disabled",
+    "config_status": "draft",
+    "group_status": "disabled",
+    "group_health_status": "unhealthy",
+    "group_drain": true,
+    "pool_status": "disabled"
+  },
+  "notes": [
+    "The existing 100 SXT rows are inventory placeholders, not validated CS2 wire DIDs.",
+    "Do not convert placeholder rows to available until real vendor-compatible DIDs are imported or generated with a verified vendor algorithm.",
+    "UDP 12305 runs the B1 PPPP F1 rendezvous path; TCP 12306/12308 are reserved and intentionally not bound until CS2 TCP/DSLK framing is implemented.",
+    "The deployable gongshi-test example fails closed for unverified DID login; synthetic local smoke creates a loopback-only temporary config when unsafe registration is needed.",
+    "No supplier secret or PSK is stored in this file."
+  ]
+}

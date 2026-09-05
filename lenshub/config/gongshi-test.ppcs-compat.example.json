@@ -1,0 +1,30 @@
+{
+  "provider_type": "p2px_ppcs",
+  "provider_region_id": "p2preg_gongshi_vendor_ppcs_test_20260905",
+  "provider_config_version": "p2px_ppcs_gongshi_vendor_test_v20260905_draft",
+  "p2p_server_group_id": "gongshi-test-group-01",
+  "p2p_resource_group_key": "p2psg_gongshi_vendor_ppcs_test_20260905",
+  "public_ip": "47.76.137.198",
+  "ports": {
+    "wakeup_udp": 12305,
+    "plain_tcp": 12306,
+    "dslk_tcp": 12308,
+    "health_http": 18080
+  },
+  "p2pid_prefix": "PPCS-GSTEST-20260905-",
+  "p2pid_start": 1,
+  "p2pid_count": 100,
+  "sxt_activation_state": {
+    "region_status": "disabled",
+    "config_status": "draft",
+    "group_status": "disabled",
+    "group_health_status": "unhealthy",
+    "group_drain": true,
+    "pool_status": "disabled"
+  },
+  "notes": [
+    "This file mirrors the prepared gongshi-test resource rows.",
+    "Do not activate these rows until a real compatible runtime is listening and protocol-level checks pass.",
+    "No supplier secrets are stored here. Use secret-managed references in SXT provider config."
+  ]
+}

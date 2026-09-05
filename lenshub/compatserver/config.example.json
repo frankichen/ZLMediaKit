@@ -5,6 +5,6 @@
   "wakeup_udp_port": 12305,
   "plain_tcp_port": 12306,
   "dslk_tcp_port": 12308,
-  "health_http_addr": "127.0.0.1:18080",
+  "health_http_addr": "127.0.0.1:18180",
   "allowed_p2pid_prefix": "PPCS-GSTEST-20260905-"
 }

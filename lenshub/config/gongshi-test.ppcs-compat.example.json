@@ -9,7 +9,7 @@
     "wakeup_udp": 12305,
     "plain_tcp": 12306,
     "dslk_tcp": 12308,
-    "health_http": 18080
+    "health_http": 18180
   },
   "p2pid_prefix": "PPCS-GSTEST-20260905-",
   "p2pid_start": 1,

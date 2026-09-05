@@ -96,7 +96,7 @@ func loadConfig(path string) (Config, error) {
 		WakeupUDPPort: 12305,
 		PlainTCPPort: 12306,
 		DSLKTCPPort: 12308,
-		HealthHTTPAddr: "127.0.0.1:18080",
+		HealthHTTPAddr: "127.0.0.1:18180",
 		AllowedP2IDPrefix: "PPCS-GSTEST-20260905-",
 	}
 	if path == "" {
